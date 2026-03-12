@@ -3,11 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MLM&SQF-INVENTORY | แม่ละมาย V24.5</title>
+    <title>MLM&SQF-INVENTORY | แม่ละมาย V24.6</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;600;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
         body {
             font-family: 'Sarabun', sans-serif;
@@ -161,6 +162,15 @@
             opacity: 0.65;
             pointer-events: none;
         }
+
+        .qr-box canvas,
+        .qr-box img {
+            margin: 0 auto;
+            background: white;
+            padding: 10px;
+            border-radius: 1.5rem;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        }
     </style>
 </head>
 <body class="min-h-screen pb-12">
@@ -211,6 +221,26 @@
         </div>
     </div>
 
+    <div id="qr-modal" class="hidden fixed inset-0 bg-black/80 z-[130] flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-[4rem] shadow-2xl overflow-hidden border-8 border-slate-900">
+            <div class="bg-slate-900 p-8 text-white flex justify-between items-center">
+                <h2 class="text-3xl font-black uppercase tracking-tighter italic">🧾 QR Code</h2>
+                <button onclick="closeQrModal()" class="text-4xl">✕</button>
+            </div>
+
+            <div class="p-8 text-center">
+                <p id="qr-title" class="font-black text-slate-700 text-xl mb-6"></p>
+                <div id="qrcode" class="qr-box flex justify-center mb-8"></div>
+                <button
+                    onclick="downloadQrImage()"
+                    class="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black shadow-lg hover:bg-black transition-all text-sm uppercase"
+                >
+                    ดาวน์โหลด QR
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="max-w-7xl mx-auto p-4 md:p-10">
         <header class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-10 gap-8 border-b-4 border-white pb-10">
             <div>
@@ -244,6 +274,12 @@
                     class="bg-emerald-600 text-white px-6 py-4 rounded-2xl font-black shadow-lg hover:bg-black transition-all text-xs uppercase"
                 >
                     ➕ เพิ่มวัตถุดิบ
+                </button>
+                <button
+                    onclick="openQrModal()"
+                    class="bg-slate-900 text-white px-6 py-4 rounded-2xl font-black shadow-lg hover:bg-blue-600 transition-all text-xs uppercase"
+                >
+                    🧾 สร้าง QR
                 </button>
                 <button
                     onclick="openScanner()"
@@ -548,6 +584,8 @@
         let verifyTarget = "";
         let stockBarChart = null;
         let statusDonutChart = null;
+        let currentQrSku = "";
+        let currentQrName = "";
 
         function checkAuth() {
             const saved = localStorage.getItem("stock_v24");
@@ -939,6 +977,7 @@
                                 <button onclick="openActionModal('${escapeJs(item.SKU)}', '${escapeJs(item.Name)}', '${escapeJs(item.Unit)}')" class="bg-blue-600 text-white px-5 py-3 rounded-2xl text-[10px] font-black hover:bg-black shadow-md uppercase">จัดการ</button>
                                 <button onclick="openVerifyModal('${escapeJs(item.SKU)}', '${escapeJs(item.Name)}')" class="bg-purple-600 text-white px-5 py-3 rounded-2xl text-[10px] font-black hover:bg-black shadow-md uppercase">ตรวจยอด</button>
                                 <button onclick="openEditModal('${escapeJs(item.SKU)}')" class="bg-sky-600 text-white px-5 py-3 rounded-2xl text-[10px] font-black hover:bg-black shadow-md uppercase">แก้ไข</button>
+                                <button onclick="openQrModalByItem('${escapeJs(item.SKU)}', '${escapeJs(item.Name)}')" class="bg-slate-900 text-white px-5 py-3 rounded-2xl text-[10px] font-black hover:bg-blue-600 shadow-md uppercase">QR</button>
                                 <button onclick="deleteSKU('${escapeJs(item.SKU)}', '${escapeJs(item.Name)}')" class="bg-red-50 text-red-600 px-5 py-3 rounded-2xl text-[10px] font-black hover:bg-red-600 hover:text-white transition-all shadow-sm uppercase">ลบ</button>
                             </div>
                         </td>
@@ -1124,6 +1163,60 @@
                 t === "IN"
                     ? "flex-1 py-5 rounded-[2.5rem] font-black text-lg bg-white shadow-xl text-emerald-600 uppercase"
                     : "flex-1 py-5 rounded-[2.5rem] font-black text-lg text-slate-400 uppercase";
+        }
+
+        function openQrModal() {
+            if (!lastData || lastData.length === 0) {
+                showToast("ยังไม่มีข้อมูลสินค้าให้สร้าง QR", "warn");
+                return;
+            }
+
+            const item = lastData[0];
+            openQrModalByItem(item.SKU, item.Name);
+        }
+
+        function openQrModalByItem(sku, name) {
+            currentQrSku = sku;
+            currentQrName = name || sku;
+
+            document.getElementById("qr-title").innerText = `${currentQrName} (${sku})`;
+            document.getElementById("qrcode").innerHTML = "";
+            document.getElementById("qr-modal").classList.remove("hidden");
+
+            new QRCode(document.getElementById("qrcode"), {
+                text: String(sku),
+                width: 220,
+                height: 220
+            });
+        }
+
+        function closeQrModal() {
+            document.getElementById("qr-modal").classList.add("hidden");
+        }
+
+        function downloadQrImage() {
+            const img = document.querySelector("#qrcode img");
+            const canvas = document.querySelector("#qrcode canvas");
+
+            let source = null;
+
+            if (img) {
+                source = img.src;
+            } else if (canvas) {
+                source = canvas.toDataURL("image/png");
+            }
+
+            if (!source) {
+                showToast("ไม่พบ QR สำหรับดาวน์โหลด", "error");
+                return;
+            }
+
+            const a = document.createElement("a");
+            a.href = source;
+            a.download = `QR_${currentQrSku || "item"}.png`;
+            a.click();
+
+            showToast("ดาวน์โหลด QR สำเร็จ 🧾", "success");
         }
 
         async function submitVerify() {
